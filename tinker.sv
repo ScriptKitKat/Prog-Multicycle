@@ -10,6 +10,16 @@ module tinker_core(
     reg [63:0] PC;
     wire [63:0] next_PC;
 
+    // Multi-cycle FSM state
+    reg  [2:0] state;
+    reg  [2:0] next_state;
+    localparam S_FETCH     = 3'd0;
+    localparam S_DECODE    = 3'd1;
+    localparam S_EXECUTE   = 3'd2;
+    localparam S_MEMORY    = 3'd3;
+    localparam S_WRITEBACK = 3'd4;
+    localparam S_HALT      = 3'd5;
+
     // Instruction fetch wire
     wire [31:0] instruction;
 
@@ -60,8 +70,22 @@ module tinker_core(
     assign is_call = (opcode == 5'h0c);
     assign is_branch_reg = (opcode == 5'h08) || (opcode == 5'h09);
 
-    assign reg_write_en = is_alu_reg || is_alu_L || is_mov_rd || is_call || is_return;
-    assign mem_write_en = (opcode == 5'h13) || (opcode == 5'h0c);
+    // Memory-op classification: load, store, call (pushes PC+4), return (reads mem[r31])
+    wire is_mem_op;
+    assign is_mem_op = (opcode == 5'h10) || (opcode == 5'h13) ||
+                       (opcode == 5'h0c) || (opcode == 5'h0d);
+
+    // Halt detection: privileged opcode 0x0f with L == 0
+    wire is_halt;
+    assign is_halt = (opcode == 5'h0f) && (L == 12'h000);
+
+    wire reg_write_en_comb;
+    wire mem_write_en_comb;
+    assign reg_write_en_comb = is_alu_reg || is_alu_L || is_mov_rd || is_call || is_return;
+    assign mem_write_en_comb = (opcode == 5'h13) || (opcode == 5'h0c);
+
+    assign reg_write_en = reg_write_en_comb && (state == S_WRITEBACK);
+    assign mem_write_en = mem_write_en_comb && (state == S_MEMORY);
 
     assign is_return = (opcode == 5'h0d);
 
@@ -141,10 +165,28 @@ module tinker_core(
     
     always @(posedge clk or posedge reset) begin
         if (reset) begin
-            PC <= `START;
+            PC    <= `START;
+            state <= S_FETCH;
+            hlt   <= 1'b0;
         end else begin
-            PC <= next_PC;
+            state <= next_state;
+            if (state == S_WRITEBACK)
+                PC <= next_PC;
+            if (state == S_DECODE && is_halt)
+                hlt <= 1'b1;
         end
+    end
+
+    always @(*) begin
+        case (state)
+            S_FETCH:     next_state = S_DECODE;
+            S_DECODE:    next_state = is_halt ? S_HALT : S_EXECUTE;
+            S_EXECUTE:   next_state = is_mem_op ? S_MEMORY : S_WRITEBACK;
+            S_MEMORY:    next_state = S_WRITEBACK;
+            S_WRITEBACK: next_state = S_FETCH;
+            S_HALT:      next_state = S_HALT;
+            default:     next_state = S_FETCH;
+        endcase
     end
 endmodule
 
