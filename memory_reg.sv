@@ -66,7 +66,7 @@ module reg_file(
                 registers[i] <= 64'b0;
             end
             registers[31] <= `MEM_SIZE;
-        end else if (write_enable && write_select != 5'b0) begin
+        end else if (write_enable) begin
             registers[write_select] <= write_data;
         end
     end

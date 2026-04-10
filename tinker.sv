@@ -6,6 +6,7 @@ module tinker_core(
     input reset,
     output logic hlt
 );
+
     // CONTROL SIGNAL FLOW
     reg [63:0] PC;
     wire [63:0] next_PC;
@@ -81,7 +82,7 @@ module tinker_core(
 
     wire reg_write_en_comb;
     wire mem_write_en_comb;
-    assign reg_write_en_comb = is_alu_reg || is_alu_L || is_mov_rd || is_call || is_return;
+    assign reg_write_en_comb = is_alu_reg || is_alu_L || is_mov_rd;
     assign mem_write_en_comb = (opcode == 5'h13) || (opcode == 5'h0c);
 
     assign reg_write_en = reg_write_en_comb && (state == S_WRITEBACK);
@@ -89,9 +90,9 @@ module tinker_core(
 
     assign is_return = (opcode == 5'h0d);
 
-    // For RETURN, memory read address is r31 (not alu_result)
+    // Data address comes from ALU (for return, ALU computes r31 - 8)
     wire [63:0] mem_data_addr;
-    assign mem_data_addr = is_return ? r31_data : alu_result;
+    assign mem_data_addr = alu_result;
 
     wire [63:0] mem_write_data;
     assign mem_write_data = (opcode == 5'h0c) ? (PC + 64'd4) :

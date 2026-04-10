@@ -97,7 +97,7 @@ module ALU(
                 branch_taken = 1'b1;
             end
             5'h0d: begin // return
-                result = r31_data + 64'd8; // restore SP (pop)
+                result = r31_data - 64'd8; // address of saved PC on stack
                 branch_taken = 1'b1;
             end
             5'h0e: begin // brgt rd, rs, rt
